@@ -1,0 +1,133 @@
+version: "3.5"
+
+services:
+  dns:
+    container_name: dns
+    restart: always
+    image: strm/dnsmasq
+    volumes:
+      - ./dnsmasq.conf:/etc/dnsmasq.conf
+    ports:
+      - "53:53/udp"
+    cap_add:
+      - NET_ADMIN
+    networks:
+      clusternetwork:
+        ipv4_address: 172.30.240.53
+
+  node1.eventstore:
+    &template
+    image: eventstore21local
+    build:
+      dockerfile: eventstorewithca.dockerfile
+      context: .
+    container_name: node1.eventstore
+    env_file:
+      - vars.env
+    environment:
+      - EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=node1.eventstore.local
+      - EVENTSTORE_EXT_HOST_ADVERTISE_AS=node1.eventstore.local
+      - EVENTSTORE_INT_HOST_ADVERTISE_AS=node1.eventstore.local
+      - EVENTSTORE_INT_IP=172.30.240.11
+      - EVENTSTORE_EXT_IP=172.30.240.11
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --insecure https://node1.eventstore:2113/health/live || exit 1"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    ports:
+      - 1111:1113
+      - 2111:2113
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+
+      - dns
+    restart: always
+    dns:
+      - "172.30.240.53"
+    dns_search: eventstore.local
+    networks:
+      clusternetwork:
+        ipv4_address: 172.30.240.11
+
+  node2.eventstore:
+    <<: *template
+    container_name: node2.eventstore
+    env_file:
+      - vars.env
+    environment:
+      - EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=node2.eventstore.local
+      - EVENTSTORE_EXT_HOST_ADVERTISE_AS=node2.eventstore.local
+      - EVENTSTORE_INT_HOST_ADVERTISE_AS=node2.eventstore.local
+      - EVENTSTORE_INT_IP=172.30.240.12
+      - EVENTSTORE_EXT_IP=172.30.240.12
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --insecure https://node2.eventstore:2113/health/live || exit 1"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    ports:
+      - 1112:1113
+      - 2112:2113
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+
+      - dns
+    dns:
+      - "172.30.240.53"
+    dns_search: eventstore.local
+    networks:
+      clusternetwork:
+        ipv4_address: 172.30.240.12
+
+  node3.eventstore:
+    <<: *template
+    container_name: node3.eventstore
+    environment:
+      - EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=node3.eventstore.local
+      - EVENTSTORE_INT_HOST_ADVERTISE_AS=node3.eventstore.local
+      - EVENTSTORE_EXT_HOST_ADVERTISE_AS=node3.eventstore.local
+      - EVENTSTORE_INT_IP=172.30.240.13
+      - EVENTSTORE_EXT_IP=172.30.240.13
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --insecure https://node3.eventstore:2113/health/live || exit 1"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    ports:
+      - 1113:1113
+      - 2113:2113
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+
+      - dns
+    dns:
+      - "172.30.240.53"
+    dns_search: eventstore.local
+    networks:
+      clusternetwork:
+        ipv4_address: 172.30.240.13
+
+networks:
+  clusternetwork:
+    name: eventstore.local
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.240.0/24
